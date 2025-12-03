@@ -1,0 +1,6 @@
+@MiniTwitter.MediaService_HostAddress = http://localhost:5288
+
+GET {{MiniTwitter.MediaService_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
