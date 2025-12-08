@@ -1,0 +1,50 @@
+﻿services:
+  postgres:
+    image: postgres:16
+    container_name: media_postgres
+    environment:
+      POSTGRES_USER: media_user
+      POSTGRES_PASSWORD: media_pass
+      POSTGRES_DB: media_db
+    ports:
+      - "5434:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  minio:
+    image: minio/minio
+    container_name: media_minio
+    environment:
+      MINIO_ROOT_USER: MINIO_ACCESS_KEY
+      MINIO_ROOT_PASSWORD: MINIO_SECRET_KEY
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+
+  media-api:
+    build:
+      context: ./MiniTwitter.MediaService
+      dockerfile: Dockerfile
+    container_name: media_api
+    depends_on:
+      - postgres
+      - minio
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Docker"
+
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=media_db;Username=media_user;Password=media_pass"
+
+      S3Configuration__AccessKey: "MINIO_ACCESS_KEY"
+      S3Configuration__SecretKey: "MINIO_SECRET_KEY"
+      S3Configuration__Region: "us-east-1"
+      S3Configuration__ServiceURL: "http://minio:9000"
+      S3Configuration__BucketName: "media-bucket"
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata:
+  minio-data:
