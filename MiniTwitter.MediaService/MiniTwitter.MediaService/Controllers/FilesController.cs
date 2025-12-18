@@ -23,15 +23,19 @@ namespace MiniTwitter.MediaService.Controllers
         // این اکشن برای سرویس‌های دیگه است که آپلود کنن
         // POST api/files
         [HttpPost]
-        public async Task<IActionResult> Upload([FromForm] IFormFile file, [FromForm] string uploaderId, CancellationToken ct)
+          public async Task<IActionResult> Upload([FromForm] UploadFileRequest request, CancellationToken ct)
         {
-            if (file == null || file.Length == 0)
+            if (request.File == null || request.File.Length == 0)
                 return BadRequest("No file uploaded");
 
-            var fileId = await _fileStorage.UploadAsync(file, uploaderId, ct);
-
-            // برگردوندن id که سرویس‌های دیگه ذخیره کنن
+            var fileId = await _fileStorage.UploadAsync(request.File, request.UploaderId, ct);
             return Ok(new { FileId = fileId });
+        }
+
+        public class UploadFileRequest
+        {
+            public IFormFile File { get; set; } = null!;
+            public string UploaderId { get; set; } = string.Empty;
         }
 
         // گرفتن اطلاعات فایل (مثلاً برای نمایش در پروفایل)

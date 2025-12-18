@@ -21,7 +21,9 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddDbContext<MediaDbContext>(options =>
 {
     var connStr = builder.Configuration.GetConnectionString("DefaultConnection");
-    options.UseNpgsql(connStr);
+    Console.WriteLine($"🔍 Connection String: {connStr}");
+    options.UseSqlServer(connStr);
+    ////options.UseNpgsql(connStr);
 });
 
 // تنظیمات S3 (MinIO / Arvan / ...)
@@ -30,6 +32,8 @@ builder.Services.Configure<S3Configuration>(
 
 // سرویس ذخیره‌سازی فایل روی S3
 builder.Services.AddScoped<IFileStorageService, S3FileStorageService>();
+//builder.Services.AddScoped<IFileStorageService, DummyFileStorageService>();
+
 
 var app = builder.Build();
 

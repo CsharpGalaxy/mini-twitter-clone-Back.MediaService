@@ -59,6 +59,7 @@ namespace MiniTwitter.MediaService.Services.Implement
             };
 
             await _s3Client.PutObjectAsync(request, ct);
+            Console.WriteLine("✅ فایل در MinIO ذخیره شد");
 
             var url = GenerateS3Url(key);
 
@@ -74,6 +75,7 @@ namespace MiniTwitter.MediaService.Services.Implement
 
             _db.Files.Add(record);
             await _db.SaveChangesAsync(ct);
+            Console.WriteLine("✅ رکورد در دیتابیس ذخیره شد");
 
             // دیگه از این به بعد سرویس‌های دیگه می‌تونن با Id این رکورد کار کنن
             return record.Id.ToString();
