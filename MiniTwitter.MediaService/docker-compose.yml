@@ -1,0 +1,79 @@
+version: '3.9'
+
+services:
+  # سرویس SQL Server برای دیتابیس
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: media-mssql
+    environment:
+      ACCEPT_EULA: 'Y'
+      SA_PASSWORD: 'SqlServer@123'
+      MSSQL_PID: 'Developer'
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql_data:/var/opt/mssql
+    networks:
+      - media-network
+    healthcheck:
+      test: ["CMD", "/opt/mssql-tools/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", "SqlServer@123", "-Q", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # سرویس MinIO برای S3 Storage
+  minio:
+    image: minio/minio:latest
+    container_name: media-minio
+    environment:
+      MINIO_ROOT_USER: 'miniadmin'
+      MINIO_ROOT_PASSWORD: 'minipass'
+    ports:
+      - "8000:9000"
+      - "8001:9001"
+    volumes:
+      - minio_data:/minio_data
+    networks:
+      - media-network
+    command: server /minio_data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+
+  # سرویس MediaService (ASP.NET Core)
+  mediaservice:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: media-service-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: 'Docker'
+      ConnectionStrings__DefaultConnection: 'Server=mssql;Database=MediaService;User Id=sa;Password=SqlServer@123;TrustServerCertificate=true'
+      S3Configuration__AccessKey: 'miniadmin'
+      S3Configuration__SecretKey: 'minipass'
+      S3Configuration__Region: 'us-east-1'
+      S3Configuration__ServiceURL: 'http://minio:9000'
+      S3Configuration__BucketName: 'media-bucket'
+    ports:
+      - "8080:8080"
+    depends_on:
+      mssql:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - media-network
+    volumes:
+      - ./MiniTwitter.MediaService:/app/src
+    restart: on-failure:10
+
+volumes:
+  mssql_data:
+  minio_data:
+
+networks:
+  media-network:
+    driver: bridge

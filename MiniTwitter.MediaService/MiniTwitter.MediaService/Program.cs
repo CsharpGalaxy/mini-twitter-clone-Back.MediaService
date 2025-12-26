@@ -30,6 +30,9 @@ builder.Services.AddDbContext<MediaDbContext>(options =>
 builder.Services.Configure<S3Configuration>(
     builder.Configuration.GetSection("S3Configuration"));
 
+// سرویس initialization S3
+builder.Services.AddScoped<S3InitializationService>();
+
 // سرویس ذخیره‌سازی فایل روی S3
 builder.Services.AddScoped<IFileStorageService, S3FileStorageService>();
 //builder.Services.AddScoped<IFileStorageService, DummyFileStorageService>();
@@ -44,6 +47,18 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<MediaDbContext>();
     db.Database.Migrate();
+    
+    // Initialize S3 Bucket
+    try
+    {
+        var s3Init = scope.ServiceProvider.GetRequiredService<S3InitializationService>();
+        await s3Init.InitializeAsync();
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"❌ خطا در مقداردهی S3: {ex.Message}");
+        // برنامه ادامه می‌یابد حتی اگر S3 آماده نباشد
+    }
 }
 
 // ----------------------

@@ -29,7 +29,7 @@ namespace MiniTwitter.MediaService.Services.Implement
             {
                 ServiceURL = _config.ServiceURL,
                 ForcePathStyle = true,
-                RegionEndpoint = RegionEndpoint.GetBySystemName(_config.Region)
+                //RegionEndpoint = RegionEndpoint.GetBySystemName(_config.Region)
             };
 
             _s3Client = new AmazonS3Client(credentials, s3Config);
@@ -47,38 +47,63 @@ namespace MiniTwitter.MediaService.Services.Implement
 
             var key = $"uploads/{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
 
-            using var stream = file.OpenReadStream();
+            // Retry logic برای اتصال به MinIO
+            int maxRetries = 5;
+            Exception lastException = null;
 
-            var request = new PutObjectRequest
+            for (int i = 0; i < maxRetries; i++)
             {
-                BucketName = _config.BucketName,
-                Key = key,
-                InputStream = stream,
-                ContentType = file.ContentType,
-                CannedACL = S3CannedACL.Private
-            };
+                try
+                {
+                    // هر بار stream جدید بازکنیم تا مشکل position حل شود
+                    using var stream = file.OpenReadStream();
 
-            await _s3Client.PutObjectAsync(request, ct);
-            Console.WriteLine("✅ فایل در MinIO ذخیره شد");
+                    var request = new PutObjectRequest
+                    {
+                        BucketName = _config.BucketName,
+                        Key = key,
+                        InputStream = stream,
+                        ContentType = file.ContentType,
+                        CannedACL = S3CannedACL.Private
+                    };
 
-            var url = GenerateS3Url(key);
+                    await _s3Client.PutObjectAsync(request, ct);
+                    Console.WriteLine("✅ فایل در MinIO ذخیره شد");
 
-            // ذخیره در دیتابیس
-            var record = new FileRecord
-            {
-                FileName = file.FileName,
-                Url = url,
-                ContentType = file.ContentType,
-                Size = file.Length,
-                UploadedBy = uploaderId
-            };
+                    var url = GenerateS3Url(key);
 
-            _db.Files.Add(record);
-            await _db.SaveChangesAsync(ct);
-            Console.WriteLine("✅ رکورد در دیتابیس ذخیره شد");
+                    // ذخیره در دیتابیس
+                    var record = new FileRecord
+                    {
+                        FileName = file.FileName,
+                        Url = url,
+                        ContentType = file.ContentType,
+                        Size = file.Length,
+                        UploadedBy = uploaderId
+                    };
 
-            // دیگه از این به بعد سرویس‌های دیگه می‌تونن با Id این رکورد کار کنن
-            return record.Id.ToString();
+                    _db.Files.Add(record);
+                    await _db.SaveChangesAsync(ct);
+                    Console.WriteLine("✅ رکورد در دیتابیس ذخیره شد");
+
+                    // دیگه از این به بعد سرویس‌های دیگه می‌تونن با Id این رکورد کار کنن
+                    return record.Id.ToString();
+                }
+                catch (Exception ex)
+                {
+                    lastException = ex;
+                    Console.WriteLine($"⚠️ تلاش {i + 1}/{maxRetries} ناموفق: {ex.Message}");
+                    
+                    if (i < maxRetries - 1)
+                    {
+                        Console.WriteLine($"⏳ صبر 2 ثانیه برای تلاش دوباره...");
+                        await Task.Delay(2000, ct);
+                    }
+                }
+            }
+
+            // اگر تمام تلاش‌ها ناموفق بود
+            throw new InvalidOperationException($"آپلود فایل بعد از {maxRetries} تلاش ناموفق بود", lastException);
         }
 
         public async Task<Stream> DownloadAsync(string fileId, CancellationToken ct = default)
